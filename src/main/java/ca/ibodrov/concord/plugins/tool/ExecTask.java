@@ -28,6 +28,7 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -66,28 +67,10 @@ public class ExecTask implements Task {
                 .directory(workDir.toFile())
                 .start();
 
-        Thread stdoutReader = new Thread(() -> {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    log.info(line);
-                }
-            } catch (IOException e) {
-                log.warn("Error while reading the command's stdout: {}", e.getMessage());
-            }
-        });
+        Thread stdoutReader = createStreamReader(proc.getInputStream(), "stdout");
         stdoutReader.start();
 
-        Thread stderrReader = new Thread(() -> {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getErrorStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    log.warn(line);
-                }
-            } catch (IOException e) {
-                log.warn("Error while reading the command's stderr: {}", e.getMessage());
-            }
-        });
+        Thread stderrReader = createStreamReader(proc.getErrorStream(), "stderr");
         stderrReader.start();
 
         int code = proc.waitFor();
@@ -99,5 +82,18 @@ public class ExecTask implements Task {
         }
 
         return TaskResult.success();
+    }
+
+    private static Thread createStreamReader(InputStream in, String type) {
+        return new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    log.info(line);
+                }
+            } catch (IOException e) {
+                log.warn("Error while reading the command's {}: {}", type, e.getMessage());
+            }
+        });
     }
 }
